@@ -79,20 +79,25 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
     // perhaps a module and re-write the pretty printing of the table
     for result in object.results.bindings {
         let mut print_res: Vec<Cell> = vec![];
+        println!("Result: {:?}", result);
         for var in &vars.vars {
-            let var_map: &serde_json::Value = &result[&var.to_string()];
-            let rdf_type = &var_map["type"];
-            let let_return_value = match rdf_type.as_str() {
-                Some("uri") => {
-                    let res = ns_dict.shorten_uri(&var_map["value"].to_string());
-                    res
-                },
-                Some("literal") => var_map["value"].to_string(),
-                Some("bnode") => var_map["value"].to_string(),
-                Some("triple") => format!("{}\t{}\t{}", var_map["subject"], var_map["predicate"], var_map["object"]),
-                _ => continue
-            };
-            print_res.push(Cell::new(&let_return_value));
+            if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None) {
+                let rdf_type = &var_map["type"];
+                let let_return_value = match rdf_type.as_str() {
+                    Some("uri") => {
+                        let res = ns_dict.shorten_uri(&var_map["value"].to_string());
+                        res
+                    },
+                    Some("literal") => var_map["value"].to_string(),
+                    Some("bnode") => var_map["value"].to_string(),
+                    Some("triple") => format!("{}\t{}\t{}", var_map["subject"], var_map["predicate"], var_map["object"]),
+                    _ => continue
+                };
+                print_res.push(Cell::new(&let_return_value));
+            } else {
+
+            }
+
         }
         table.add_row(Row::new(print_res));
 
