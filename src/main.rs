@@ -3,7 +3,6 @@ use std::{fs, path::PathBuf, io::Cursor};
 use clap::Parser;
 use serde_json::Map;
 use serde_derive::Deserialize;
-#[macro_use] extern crate prettytable;
 use prettytable::{ Table, Row, Cell };
 
 
