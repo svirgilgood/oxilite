@@ -67,11 +67,10 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
 
     let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
     if res.is_err() {
-        println!("Error in parsing the results")
+        println!("Error in parsing the results");
     }
     let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
     let vars = object.head;
-    let bindings: ResultJson = object.results;
 
     let mut table = Table::new();
     let headings = Row::new(vars.vars.clone().into_iter().map(|x| Cell::new(&x)).collect());
@@ -79,7 +78,7 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
 
     // the following loop should really be placed in its own function
     // perhaps a module and re-write the pretty printing of the table
-    for result in bindings.bindings {
+    for result in object.results.bindings {
         let mut print_res: Vec<Cell> = vec![];
         for var in &vars.vars {
             let var_map: &serde_json::Value = &result[&var.to_string()];
