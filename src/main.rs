@@ -79,7 +79,6 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
     // perhaps a module and re-write the pretty printing of the table
     for result in object.results.bindings {
         let mut print_res: Vec<Cell> = vec![];
-        println!("Result: {:?}", result);
         for var in &vars.vars {
             if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None) {
                 let rdf_type = &var_map["type"];
