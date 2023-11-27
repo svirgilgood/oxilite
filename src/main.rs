@@ -93,8 +93,6 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
                     _ => continue
                 };
                 print_res.push(Cell::new(&let_return_value));
-            } else {
-
             }
 
         }
