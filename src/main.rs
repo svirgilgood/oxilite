@@ -8,6 +8,8 @@ use prettytable::{ Table, Row, Cell };
 
 mod prefix;
 use crate::prefix::{Prefix, find_prefixes};
+mod repl;
+use crate::repl::readlinefn;
 
 
 #[derive(Parser, Debug)]
@@ -19,7 +21,7 @@ struct Args {
 
     /// name of the file or string for loading the query
     #[arg(short, long)]
-    query: String,
+    query: Option<String>,
 }
 
 
@@ -127,7 +129,16 @@ fn main() {
         return
     }
 
-    let query = args.query.clone();
+    let query = match args.query {
+        Some(str) => str,
+        None => {
+            let q = readlinefn();
+            match q {
+                Some(str) => str,
+                None => panic!("Error in readline")
+            }
+        },
+    };
 
     if std::path::Path::new(&query).exists()  {
         let read_file = fs::read_to_string(&query);
