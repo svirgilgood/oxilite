@@ -25,6 +25,8 @@ struct Args {
 
 fn update_store(store: &mut Store, path: PathBuf, ns_dict: &mut Prefix) -> Option<()> {
     let ext = path.extension()?;
+    let name = path.file_name()?.to_ascii_lowercase();
+
     if ext.is_empty() { return None}
     let file = fs::read(path);
 
@@ -36,7 +38,8 @@ fn update_store(store: &mut Store, path: PathBuf, ns_dict: &mut Prefix) -> Optio
     find_prefixes(&file_contents, ns_dict);
     let res = store.load_dataset(Cursor::new(&file_contents), DatasetFormat::TriG, None);
     if res.is_err() {
-        println!("Error saving quads to store");
+        println!("Error: {:?}", res);
+        println!("Error saving {:?} to store", name);
         return None;
     }
 
@@ -94,6 +97,9 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
                 };
                 print_res.push(Cell::new(&let_return_value));
             } else {
+                // This happens when there is no particular result for the variable, we need to set a place holder
+                // This allows the cell to be empty
+                print_res.push(Cell::new(""))
 
             }
 
