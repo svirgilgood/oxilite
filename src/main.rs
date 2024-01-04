@@ -98,14 +98,11 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
                     _ => continue
                 };
                 print_res.push(Cell::new(&let_return_value));
-<<<<<<< HEAD
-=======
             } else {
                 // This happens when there is no particular result for the variable, we need to set a place holder
                 // This allows the cell to be empty
                 print_res.push(Cell::new(""))
 
->>>>>>> main
             }
 
         }
