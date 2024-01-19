@@ -1,6 +1,6 @@
 use oxigraph::{io::DatasetFormat, store::Store, sparql::QueryResultsFormat};
 use std::{fs, path::PathBuf, io::Cursor};
-use clap::Parser;
+use clap::{Parser, ArgAction};
 use serde_json::Map;
 use serde_derive::Deserialize;
 use prettytable::{ Table, Row, Cell };
@@ -13,13 +13,17 @@ use crate::prefix::{Prefix, find_prefixes};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None )]
 struct Args {
-    /// name of the directory for trig/nq files
+    /// Name of the directory for trig/nq files
     #[arg(short, long)]
     directory: String,
 
-    /// name of the file or string for loading the query
+    /// Name of the file or string for loading the query
     #[arg(short, long)]
     query: String,
+
+    /// Print the query before executing
+    #[arg(long, action=ArgAction::SetTrue)]
+    print_query: bool,
 }
 
 
@@ -63,9 +67,16 @@ struct ResultJson {
 }
 
 
-fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
+fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool) {
     let mut writer: Vec<_> = Vec::new();
-    let solutions = store.query(query);
+    let prefix_string = ns_dict.format_for_query();
+    let formated_query = format!("{prefix_string}\n{query}");
+
+    if print {
+        println!("{}", formated_query);
+    }
+
+    let solutions = store.query(&formated_query);
 
     let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
     if res.is_err() {
@@ -143,12 +154,13 @@ fn main() {
             println!("There is an error in reading the query file");
             return
         }
-        print_query(&store, &read_file.unwrap(), &mut ns_dict);
+        print_query(&store, &read_file.unwrap(), &mut ns_dict, args.print_query);
 
         return
     }
     // println!("query: {query}");
 
-    print_query(&store, &query, &mut ns_dict);
+    print_query(&store, &query, &mut ns_dict, args.print_query);
 
 }
+

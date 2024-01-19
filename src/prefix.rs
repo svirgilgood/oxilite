@@ -68,6 +68,23 @@ impl Prefix {
     }
     return uri.to_string();
   }
+
+  pub fn format_for_query(&self) -> String {
+      let mut prefixes = String::new();
+      for namespace in self.list.iter() {
+        if let Some(prefix) = self.get(&namespace) {
+              let pref_str = String::from_utf8(prefix.to_vec()).unwrap();
+              let ns_string = String::from_utf8(namespace.to_vec()).unwrap();
+              let line = format!("PREFIX {pref_str}: <{ns_string}>");
+              prefixes = format!("{prefixes}\n{line}");
+          }
+          else {
+              continue
+          }
+
+      }
+      prefixes.to_owned()
+  }
 }
 
 fn transform_to_bytes<'a>(uri: &'a str) -> &'a [u8]{
@@ -123,4 +140,24 @@ mod tests {
     assert_eq!(res, "rdf:comment");
   }
 
+  #[test]
+  fn should_return_formated_prefixes() {
+     let mut ns_dict = Prefix::new();
+
+     let rdf_ns = "http://www.w3.org/2000/01/rdf-schema#".as_bytes();
+     let rdf_pref = "rdf".as_bytes();
+     ns_dict.add(&rdf_ns, &rdf_pref);
+
+     let ex_ns = "https://example.com/".as_bytes();
+     let ex_pref = "ex".as_bytes();
+     ns_dict.add(&ex_ns, &ex_pref);
+     ns_dict.sort();
+
+     let expected_result = "\nPREFIX rdf: <http://www.w3.org/2000/01/rdf-schema#>\nPREFIX ex: <https://example.com/>";
+     assert_eq!(expected_result, ns_dict.format_for_query());
+
+
+  }
+
 }
+
