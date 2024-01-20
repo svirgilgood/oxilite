@@ -78,10 +78,6 @@ impl Prefix {
               let line = format!("PREFIX {pref_str}: <{ns_string}>");
               prefixes = format!("{prefixes}\n{line}");
           }
-          else {
-              continue
-          }
-
       }
       prefixes.to_owned()
   }
