@@ -24,6 +24,12 @@ struct Args {
     /// Print the query before executing
     #[arg(long, action=ArgAction::SetTrue)]
     print_query: bool,
+
+    /// Toggle prefix injection. For inline queries the default
+    /// is to inject the prefixes into the query, but for file based queries,
+    /// the default is to not inject the prefixes
+    #[arg(long, action=ArgAction::SetFalse)]
+    toggle_prefix: bool,
 }
 
 
@@ -67,10 +73,16 @@ struct ResultJson {
 }
 
 
-fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool) {
+fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is_prefix_injected: bool) {
     let mut writer: Vec<_> = Vec::new();
     let prefix_string = ns_dict.format_for_query();
-    let formated_query = format!("{prefix_string}\n{query}");
+    let formated_query = if is_prefix_injected { 
+        let fq = format!("{prefix_string}\n{query}"); 
+        fq
+    } else { 
+        let fq = query.clone();
+        fq.to_string()
+    };
 
     if print {
         println!("{}", formated_query);
@@ -154,13 +166,13 @@ fn main() {
             println!("There is an error in reading the query file");
             return
         }
-        print_query(&store, &read_file.unwrap(), &mut ns_dict, args.print_query);
+        print_query(&store, &read_file.unwrap(), &mut ns_dict, args.print_query, !args.toggle_prefix);
 
         return
     }
     // println!("query: {query}");
 
-    print_query(&store, &query, &mut ns_dict, args.print_query);
+    print_query(&store, &query, &mut ns_dict, args.print_query, args.toggle_prefix);
 
 }
 
