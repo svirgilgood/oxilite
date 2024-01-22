@@ -79,6 +79,7 @@ impl Prefix {
               prefixes = format!("{prefixes}\n{line}");
           }
       }
+      prefixes = format!("{prefixes}\n");
       prefixes.to_owned()
   }
 }
