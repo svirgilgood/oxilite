@@ -1,11 +1,9 @@
 // use rustyline::error::ReadlineError;
-use crate::prefix::{Prefix, find_prefixes};
-
+use crate::prefix::Prefix;
 
 use rustyline::highlight::MatchingBracketHighlighter;
 use rustyline::validate::MatchingBracketValidator;
-use rustyline::{Editor};
-use rustyline::{Completer, Helper, Highlighter, Hinter, Validator};
+use rustyline::{Editor, Completer, Helper, Highlighter, Hinter, Validator};
 
 #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
 struct InputValidator {
