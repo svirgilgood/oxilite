@@ -1,6 +1,6 @@
 use oxigraph::{io::DatasetFormat, store::Store, sparql::QueryResultsFormat};
 use std::{fs, path::PathBuf, io::Cursor};
-use clap::Parser;
+use clap::{Parser, ArgAction};
 use serde_json::Map;
 use serde_derive::Deserialize;
 use prettytable::{ Table, Row, Cell };
@@ -15,13 +15,23 @@ use crate::repl::readlinefn;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None )]
 struct Args {
-    /// name of the directory for trig/nq files
+    /// Name of the directory for trig/nq files
     #[arg(short, long)]
     directory: String,
 
-    /// name of the file or string for loading the query
+    /// Name of the file or string for loading the query
     #[arg(short, long)]
     query: Option<String>,
+
+    /// Print the query before executing
+    #[arg(long, action=ArgAction::SetTrue)]
+    print_query: bool,
+
+    /// Toggle prefix injection. For inline queries the default
+    /// is to inject the prefixes into the query, but for file based queries,
+    /// the default is to not inject the prefixes
+    #[arg(long, action=ArgAction::SetFalse)]
+    toggle_prefix: bool,
 }
 
 
@@ -65,9 +75,20 @@ struct ResultJson {
 }
 
 
-fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix) {
+fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is_prefix_injected: bool) {
     let mut writer: Vec<_> = Vec::new();
-    let solutions = store.query(query);
+    let prefix_string = ns_dict.format_for_query();
+    let formated_query = if is_prefix_injected { 
+        format!("{prefix_string}\n\n{query}")
+    } else { 
+        query.clone().to_string()
+    };
+
+    if print {
+        println!("{}\n\n", formated_query);
+    }
+
+    let solutions = store.query(&formated_query);
 
     let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
     if res.is_err() {
@@ -140,7 +161,7 @@ fn main() {
     let query = match args.query {
         Some(str) => str,
         None => {
-            let q = readlinefn();
+            let q = readlinefn(&ns_dict);
             match q {
                 Some(str) => str,
                 None => panic!("Error in readline")
@@ -154,12 +175,13 @@ fn main() {
             println!("There is an error in reading the query file");
             return
         }
-        print_query(&store, &read_file.unwrap(), &mut ns_dict);
+        print_query(&store, &read_file.unwrap(), &mut ns_dict, args.print_query, !args.toggle_prefix);
 
         return
     }
     // println!("query: {query}");
 
-    print_query(&store, &query, &mut ns_dict);
+    print_query(&store, &query, &mut ns_dict, args.print_query, args.toggle_prefix);
 
 }
+
