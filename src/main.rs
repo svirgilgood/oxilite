@@ -131,6 +131,8 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is
 
     }
     table.printstd();
+    let row_numbers = table.len();
+    println!("Total: {}", row_numbers - 1);
 
 }
 
