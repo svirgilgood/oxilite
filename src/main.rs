@@ -1,4 +1,5 @@
 use oxigraph::{io::DatasetFormat, store::Store, sparql::QueryResultsFormat};
+use spargebra::Query;
 use std::{fs, path::PathBuf, io::Cursor};
 use clap::{Parser, ArgAction};
 use serde_json::Map;
@@ -75,26 +76,8 @@ struct ResultJson {
 }
 
 
-fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is_prefix_injected: bool) {
-    let mut writer: Vec<_> = Vec::new();
-    let prefix_string = ns_dict.format_for_query();
-    let formated_query = if is_prefix_injected { 
-        format!("{prefix_string}\n\n{query}")
-    } else { 
-        query.clone().to_string()
-    };
-
-    if print {
-        println!("{}\n\n", formated_query);
-    }
-
-    let solutions = store.query(&formated_query);
-
-    let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
-    if res.is_err() {
-        println!("Error in parsing the results");
-    }
-    let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
+fn print_results_table(&results: QueryResults:Solutions) {
+   let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
     let vars = object.head;
 
     let mut table = Table::new();
@@ -132,7 +115,39 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is
     }
     table.printstd();
 
+
 }
+
+
+fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is_prefix_injected: bool) {
+    let mut writer: Vec<_> = Vec::new();
+    let prefix_string = ns_dict.format_for_query();
+    let formated_query = if is_prefix_injected { 
+        format!("{prefix_string}\n\n{query}")
+    } else { 
+        query.clone().to_string()
+    };
+
+    if print {
+        println!("{}\n\n", formated_query);
+    }
+
+    let parsed_query = Query::parse(&formated_query);
+
+    let solutions = store.query(&parsed_query);
+
+    match solutions {
+        Result(QueryResults::Solutions) => print_results_table(&solutions.unwrap()),
+        Result(QueryResults::Boolean) => println!("Result {}", solutions.unwrap()),
+        Result(QueryResults::Graph) => println!("{}", )
+
+    }
+
+    let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
+    if res.is_err() {
+        println!("Error in parsing the results");
+    }
+ }
 
 fn main() {
     let args = Args::parse();
@@ -185,3 +200,15 @@ fn main() {
 
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn print_select_query() {
+
+        let mut ns_dict = Prefix::new();
+        let namespace = "https://www.example.com/"
+    }
+}
