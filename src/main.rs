@@ -114,6 +114,8 @@ fn print_results_table(&results: QueryResults:Solutions) {
 
     }
     table.printstd();
+    let row_numbers = table.len();
+    println!("Total: {}", row_numbers - 1);
 
 
 }
