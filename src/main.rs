@@ -1,23 +1,23 @@
-use oxigraph::{io::DatasetFormat, store::Store, sparql::QueryResultsFormat};
-use std::{fs, path::PathBuf, io::Cursor};
-use clap::{Parser, ArgAction};
-use serde_json::Map;
+use clap::{ArgAction, Parser};
+use oxigraph::{
+    io::DatasetFormat, model::Term, sparql::QueryResults, sparql::QueryResultsFormat, store::Store,
+};
+use prettytable::{Cell, Row, Table};
 use serde_derive::Deserialize;
-use prettytable::{ Table, Row, Cell };
-
+use serde_json::Map;
+use std::{fs, io::Cursor, path::PathBuf};
 
 mod prefix;
-use crate::prefix::{Prefix, find_prefixes};
+use crate::prefix::{find_prefixes, Prefix};
 mod repl;
 use crate::repl::readlinefn;
-
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None )]
 struct Args {
     /// Name of the directory for trig/nq files
     #[arg(short, long)]
-    directory: String,
+    directory: Option<String>,
 
     /// Name of the file or string for loading the query
     #[arg(short, long)]
@@ -27,6 +27,11 @@ struct Args {
     #[arg(long, action=ArgAction::SetTrue)]
     print_query: bool,
 
+    /// Use or create a saved database. By specifying the database these will be stored
+    /// or they will re-use the exiting database
+    #[arg(long)]
+    db: Option<String>,
+
     /// Toggle prefix injection. For inline queries the default
     /// is to inject the prefixes into the query, but for file based queries,
     /// the default is to not inject the prefixes
@@ -34,12 +39,13 @@ struct Args {
     toggle_prefix: bool,
 }
 
-
 fn update_store(store: &mut Store, path: PathBuf, ns_dict: &mut Prefix) -> Option<()> {
     let ext = path.extension()?;
     let name = path.file_name()?.to_ascii_lowercase();
 
-    if ext.is_empty() { return None}
+    if ext.is_empty() {
+        return None;
+    }
     let file = fs::read(path);
 
     if file.is_err() {
@@ -71,16 +77,21 @@ struct HeadJson {
 
 #[derive(Deserialize)]
 struct ResultJson {
-    bindings: Vec<Map<String, serde_json::Value>>
+    bindings: Vec<Map<String, serde_json::Value>>,
 }
 
-
-fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is_prefix_injected: bool) {
+fn print_query(
+    store: &Store,
+    query: &str,
+    ns_dict: &mut Prefix,
+    print: bool,
+    is_prefix_injected: bool,
+) {
     let mut writer: Vec<_> = Vec::new();
     let prefix_string = ns_dict.format_for_query();
-    let formated_query = if is_prefix_injected { 
+    let formated_query = if is_prefix_injected {
         format!("{prefix_string}\n\n{query}")
-    } else { 
+    } else {
         query.clone().to_string()
     };
 
@@ -90,7 +101,9 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is
 
     let solutions = store.query(&formated_query);
 
-    let res = solutions.unwrap().write(&mut writer, QueryResultsFormat::Json);
+    let res = solutions
+        .unwrap()
+        .write(&mut writer, QueryResultsFormat::Json);
     if res.is_err() {
         println!("Error in parsing the results");
     }
@@ -98,7 +111,13 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is
     let vars = object.head;
 
     let mut table = Table::new();
-    let headings = Row::new(vars.vars.clone().into_iter().map(|x| Cell::new(&x)).collect());
+    let headings = Row::new(
+        vars.vars
+            .clone()
+            .into_iter()
+            .map(|x| Cell::new(&x))
+            .collect(),
+    );
     table.add_row(headings);
 
     // the following loop should really be placed in its own function
@@ -106,58 +125,119 @@ fn print_query(store: &Store, query: &str, ns_dict: &mut Prefix, print: bool, is
     for result in object.results.bindings {
         let mut print_res: Vec<Cell> = vec![];
         for var in &vars.vars {
-            if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None) {
+            if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None)
+            {
                 let rdf_type = &var_map["type"];
                 let let_return_value = match rdf_type.as_str() {
                     Some("uri") => {
                         let res = ns_dict.shorten_uri(&var_map["value"].to_string());
                         res
-                    },
+                    }
                     Some("literal") => var_map["value"].to_string(),
                     Some("bnode") => var_map["value"].to_string(),
-                    Some("triple") => format!("{}\t{}\t{}", var_map["subject"], var_map["predicate"], var_map["object"]),
-                    _ => continue
+                    Some("triple") => format!(
+                        "{}\t{}\t{}",
+                        var_map["subject"], var_map["predicate"], var_map["object"]
+                    ),
+                    _ => continue,
                 };
                 print_res.push(Cell::new(&let_return_value));
             } else {
                 // This happens when there is no particular result for the variable, we need to set a place holder
                 // This allows the cell to be empty
                 print_res.push(Cell::new(""))
-
             }
-
         }
         table.add_row(Row::new(print_res));
-
     }
     table.printstd();
     let row_numbers = table.len();
     println!("Total: {}", row_numbers - 1);
+}
 
+fn get_namespaces(ns_dict: &mut Prefix, store: &Store) {
+    let query = "
+PREFIX sh: <http://www.w3.org/ns/shacl#>
+
+SELECT ?prefix ?namespace 
+WHERE {
+    ?declaration 
+        a sh:PrefixDeclaration ;
+        sh:prefix ?prefix ;
+        sh:namespace ?namespace ;
+    .
+}
+        ";
+    if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
+        for solution in solutions {
+            if let Ok(sol) = solution {
+                let namespace_term = sol.get("namespace").unwrap();
+                let namespace = match namespace_term {
+                    Term::Literal(ns) => {
+                        let (value, _, _) = ns.clone().destruct();
+                        value
+                    }
+                    _ => namespace_term.to_string(),
+                };
+                let prefix_term = sol.get("prefix").unwrap();
+                let prefix = match prefix_term {
+                    Term::Literal(prf) => {
+                        let (value, _, _) = prf.clone().destruct();
+                        value
+                    }
+                    _ => prefix_term.to_string(),
+                };
+
+                ns_dict.add(
+                    namespace.to_string().as_bytes(),
+                    prefix.to_string().as_bytes(),
+                );
+                //if let Term::Literal(ns) = namespace {}
+                //ns_dict.add(namespace.to_string().as_bytes())
+            } else {
+                println!("There is a problem");
+            }
+            println!("at the end of the if");
+        }
+    }
 }
 
 fn main() {
     let args = Args::parse();
 
-    let mut store = Store::new().unwrap();
-
-    let dir = args.directory.clone();
+    let mut store = match args.db {
+        Some(str) => {
+            let path = std::path::Path::new(&str);
+            Store::open(path).unwrap()
+        }
+        _ => Store::new().unwrap(),
+    };
 
     let mut ns_dict: Prefix = Prefix::new();
 
-    let paths = fs::read_dir(dir).unwrap();
-    for path in paths {
-        if path.is_err() {
-            println!("Path contains error: {:?}", path);
-            continue
+    if let Some(dir) = &args.directory {
+        let paths = fs::read_dir(&dir).unwrap();
+        for path in paths {
+            if path.is_err() {
+                println!("Path contains error: {:?}", path);
+                continue;
+            };
+            update_store(&mut store, path.unwrap().path(), &mut ns_dict);
+        }
+        if let Err(e) = ns_dict.save_to_store(&mut store) {
+            println!("{:?}", e);
+            panic!("Error in Save to Store");
         };
-        update_store(&mut store, path.unwrap().path(), &mut ns_dict);
-    }
+    };
+
+    if &args.directory == &None {
+        get_namespaces(&mut ns_dict, &store)
+    };
 
     let length = store.len();
     if length.is_err() || length.unwrap() == 0 {
         println!("Error in loading datasets");
-        return
+        return;
     }
 
     let query = match args.query {
@@ -166,24 +246,34 @@ fn main() {
             let q = readlinefn(&ns_dict);
             match q {
                 Some(str) => str,
-                None => panic!("Error in readline")
+                None => panic!("Error in readline"),
             }
-        },
+        }
     };
 
-    if std::path::Path::new(&query).exists()  {
+    if std::path::Path::new(&query).exists() {
         let read_file = fs::read_to_string(&query);
         if read_file.is_err() {
             println!("There is an error in reading the query file");
-            return
+            return;
         }
-        print_query(&store, &read_file.unwrap(), &mut ns_dict, args.print_query, !args.toggle_prefix);
+        print_query(
+            &store,
+            &read_file.unwrap(),
+            &mut ns_dict,
+            args.print_query,
+            !args.toggle_prefix,
+        );
 
-        return
+        return;
     }
     // println!("query: {query}");
 
-    print_query(&store, &query, &mut ns_dict, args.print_query, args.toggle_prefix);
-
+    print_query(
+        &store,
+        &query,
+        &mut ns_dict,
+        args.print_query,
+        args.toggle_prefix,
+    );
 }
-
