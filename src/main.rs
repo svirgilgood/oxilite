@@ -216,16 +216,20 @@ WHERE {
 fn main() {
     let args = Args::parse();
 
+    // Store::open is used for an on disk database, it will work even if the the
+    // store doesn't exist, Oxigraph will create it
     let mut store = match args.db {
         Some(str) => {
             let path = std::path::Path::new(&str);
             Store::open(path).unwrap()
         }
+        // Store::new() will create an in memory store that will drop after the script finishes
         _ => Store::new().unwrap(),
     };
 
     let mut ns_dict: Prefix = Prefix::new();
 
+    // read through the directory if it is found
     if let Some(dir) = &args.directory {
         let paths = fs::read_dir(&dir).unwrap();
         for path in paths {
@@ -241,6 +245,9 @@ fn main() {
         };
     };
 
+    // if there is a directory supplied, the namespaces are supplied in the files
+    // if there is no directory supplied, it needs to be grabed from the prefixes stored
+    // in the databases
     if &args.directory == &None {
         get_namespaces(&mut ns_dict, &store)
     };
