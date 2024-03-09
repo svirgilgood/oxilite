@@ -66,7 +66,7 @@ impl Prefix {
         let sh_prefix = NamedNode::new("http://www.w3.org/ns/shacl#prefix").unwrap();
         let sh_namespace = NamedNode::new("http://www.w3.org/ns/shacl#namespace").unwrap();
         let sh_declaration =
-            NamedNode::new("http://www.w3.org/ns/shacl#PrefixDecleration").unwrap();
+            NamedNode::new("http://www.w3.org/ns/shacl#PrefixDeclaration").unwrap();
         for (ns, pfx) in &self.map {
             let prefix = std::str::from_utf8(&pfx).unwrap();
             let namespace = std::str::from_utf8(&ns).unwrap();

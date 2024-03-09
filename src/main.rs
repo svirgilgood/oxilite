@@ -155,6 +155,23 @@ fn print_query(
     println!("Total: {}", row_numbers - 1);
 }
 
+///
+/// Takes a Prefix dictionary and a store, and updates the dictionary based on the
+/// existing prefixes in the database
+/// The query that creates these is the following SPARQL
+///
+/// PREFIX sh: <http://www.w3.org/ns/shacl#>
+///
+/// ```
+/// SELECT ?prefix ?namespace
+/// WHERE {
+///    ?declaration
+///        a sh:PrefixDecleration ;
+///        sh:prefix ?prefix ;
+///        sh:namespace ?namespace ;
+///    .
+/// }
+///````
 fn get_namespaces(ns_dict: &mut Prefix, store: &Store) {
     let query = "
 PREFIX sh: <http://www.w3.org/ns/shacl#>
@@ -168,36 +185,30 @@ WHERE {
     .
 }
         ";
-    if let QueryResults::Solutions(solutions) = store.query(query).unwrap() {
-        for solution in solutions {
-            if let Ok(sol) = solution {
-                let namespace_term = sol.get("namespace").unwrap();
-                let namespace = match namespace_term {
-                    Term::Literal(ns) => {
-                        let (value, _, _) = ns.clone().destruct();
-                        value
-                    }
-                    _ => namespace_term.to_string(),
-                };
-                let prefix_term = sol.get("prefix").unwrap();
-                let prefix = match prefix_term {
-                    Term::Literal(prf) => {
-                        let (value, _, _) = prf.clone().destruct();
-                        value
-                    }
-                    _ => prefix_term.to_string(),
-                };
+    if let QueryResults::Solutions(solutions) = store.query(query).expect("Error in query Results")
+    {
+        for solution in solutions.filter_map(|x| x.ok()) {
+            let namespace_term = solution.get("namespace").unwrap();
+            let namespace = match namespace_term {
+                Term::Literal(ns) => {
+                    let (value, _, _) = ns.clone().destruct();
+                    value
+                }
+                _ => namespace_term.to_string(),
+            };
+            let prefix_term = solution.get("prefix").unwrap();
+            let prefix = match prefix_term {
+                Term::Literal(prf) => {
+                    let (value, _, _) = prf.clone().destruct();
+                    value
+                }
+                _ => prefix_term.to_string(),
+            };
 
-                ns_dict.add(
-                    namespace.to_string().as_bytes(),
-                    prefix.to_string().as_bytes(),
-                );
-                //if let Term::Literal(ns) = namespace {}
-                //ns_dict.add(namespace.to_string().as_bytes())
-            } else {
-                println!("There is a problem");
-            }
-            println!("at the end of the if");
+            ns_dict.add(
+                namespace.to_string().as_bytes(),
+                prefix.to_string().as_bytes(),
+            );
         }
     }
 }
