@@ -1,6 +1,10 @@
 use clap::{ArgAction, Parser};
 use oxigraph::{
-    io::DatasetFormat, model::Term, sparql::QueryResults, sparql::QueryResultsFormat, store::Store,
+    io::DatasetFormat,
+    model::Term,
+    sparql::QueryResults,
+    sparql::{QueryResultsFormat, QuerySolution},
+    store::Store,
 };
 use prettytable::{Cell, Row, Table};
 use serde_derive::Deserialize;
@@ -185,26 +189,25 @@ WHERE {
     .
 }
         ";
+    // This lambda function is about simplifying the turning of a Solution Term into a String
+    // to simplify the creation of the dictionary entry
+    let term_getter = |solution: &QuerySolution, variable: &str| -> String {
+        let term = solution.get(variable).unwrap();
+        let value = match term {
+            Term::Literal(v) => {
+                let (value, _, _) = v.clone().destruct();
+                value
+            }
+            _ => term.to_string(),
+        };
+        value
+    };
+
     if let QueryResults::Solutions(solutions) = store.query(query).expect("Error in query Results")
     {
         for solution in solutions.filter_map(|x| x.ok()) {
-            let namespace_term = solution.get("namespace").unwrap();
-            let namespace = match namespace_term {
-                Term::Literal(ns) => {
-                    let (value, _, _) = ns.clone().destruct();
-                    value
-                }
-                _ => namespace_term.to_string(),
-            };
-            let prefix_term = solution.get("prefix").unwrap();
-            let prefix = match prefix_term {
-                Term::Literal(prf) => {
-                    let (value, _, _) = prf.clone().destruct();
-                    value
-                }
-                _ => prefix_term.to_string(),
-            };
-
+            let namespace = term_getter(&solution, "namespace");
+            let prefix = term_getter(&solution, "prefix");
             ns_dict.add(
                 namespace.to_string().as_bytes(),
                 prefix.to_string().as_bytes(),
