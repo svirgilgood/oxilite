@@ -170,7 +170,7 @@ fn print_query(
 /// SELECT ?prefix ?namespace
 /// WHERE {
 ///    ?declaration
-///        a sh:PrefixDecleration ;
+///        a sh:PrefixDeclaration ;
 ///        sh:prefix ?prefix ;
 ///        sh:namespace ?namespace ;
 ///    .
