@@ -1,3 +1,4 @@
 /target
 .vscode/
 demo_files/*
+test.db/*
