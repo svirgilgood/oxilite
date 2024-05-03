@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn should_return_formated_prefixes() {
+    fn should_return_formatted_prefixes() {
         let mut ns_dict = Prefix::new();
 
         let rdf_ns = "http://www.w3.org/2000/01/rdf-schema#".as_bytes();

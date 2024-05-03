@@ -93,17 +93,17 @@ fn print_query(
 ) {
     let mut writer: Vec<_> = Vec::new();
     let prefix_string = ns_dict.format_for_query();
-    let formated_query = if is_prefix_injected {
+    let formatted_query = if is_prefix_injected {
         format!("{prefix_string}\n\n{query}")
     } else {
         query.clone().to_string()
     };
 
     if print {
-        println!("{}\n\n", formated_query);
+        println!("{}\n\n", formatted_query);
     }
 
-    let solutions = store.query(&formated_query);
+    let solutions = store.query(&formatted_query);
 
     let res = solutions
         .unwrap()
@@ -216,7 +216,6 @@ WHERE {
     }
 }
 
-
 fn main() {
     let args = Args::parse();
 
@@ -250,7 +249,7 @@ fn main() {
     };
 
     // if there is a directory supplied, the namespaces are supplied in the files
-    // if there is no directory supplied, it needs to be grabed from the prefixes stored
+    // if there is no directory supplied, it needs to be grabbed from the prefixes stored
     // in the databases
     if &args.directory == &None {
         get_namespaces(&mut ns_dict, &store)
@@ -299,3 +298,4 @@ fn main() {
         args.toggle_prefix,
     );
 }
+
