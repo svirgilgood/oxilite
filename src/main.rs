@@ -96,7 +96,7 @@ fn print_query(
     let formatted_query = if is_prefix_injected {
         format!("{prefix_string}\n\n{query}")
     } else {
-        query.clone().to_string()
+        query.to_string()
     };
 
     if print {
@@ -298,4 +298,3 @@ fn main() {
         args.toggle_prefix,
     );
 }
-
