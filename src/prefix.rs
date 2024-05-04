@@ -32,10 +32,9 @@ impl Prefix {
         if self.map.contains_key(namespace) {
             return;
         }
-        self.map
-            .insert(namespace.clone().into(), prefix.clone().into());
+        self.map.insert(namespace.into(), prefix.into());
 
-        self.list.push(Box::new(namespace.clone().to_vec()));
+        self.list.push(Box::new(namespace.to_vec()));
     }
 
     // commenting out this method as we don't need an iterator... yet
