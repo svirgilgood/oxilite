@@ -93,17 +93,17 @@ fn print_query(
 ) {
     let mut writer: Vec<_> = Vec::new();
     let prefix_string = ns_dict.format_for_query();
-    let formated_query = if is_prefix_injected {
+    let formatted_query = if is_prefix_injected {
         format!("{prefix_string}\n\n{query}")
     } else {
         query.clone().to_string()
     };
 
     if print {
-        println!("{}\n\n", formated_query);
+        println!("{}\n\n", formatted_query);
     }
 
-    let solutions = store.query(&formated_query);
+    let solutions = store.query(&formatted_query);
 
     let res = solutions
         .unwrap()
