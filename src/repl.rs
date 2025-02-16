@@ -1,12 +1,11 @@
 // use rustyline::error::ReadlineError;
 use crate::prefix::Prefix;
 
-use spargebra::{ParseError, Query};
+use spargebra::Query;
 
 use rustyline::error::ReadlineError;
-use rustyline::highlight::MatchingBracketHighlighter;
 use rustyline::validate;
-use rustyline::validate::{MatchingBracketValidator, ValidationContext, ValidationResult};
+use rustyline::validate::{ValidationContext, ValidationResult};
 use rustyline::{Completer, Editor, Helper, Highlighter, Hinter, Validator};
 
 #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
@@ -40,8 +39,21 @@ impl validate::Validator for SparqlValidator {
 
 fn validate_sparql_string(input: &str) -> Result<ValidationResult, ReadlineError> {
     let query = Query::parse(input, None);
+    //println!("\nline 42: {:?}", &query);
+    // The following if needs to be removed in order for the
+    // implementation to work
+    // if query.is_err() {
+    //     // I am not sure: How do you pull the error out and format the query with the error highlighted?
+    //     println!("\nline 47: {:?}", &query);
+    //     // match query {
+    //     //     Err(e) => println!("{}", &e),
+    //     //     _ => (),
+    //     // }
+    //     println!("Here is the error\n");
+    //     //panic!("hello");
+    // };
     match query {
-        Err(ParseError) => return Ok(ValidationResult::Incomplete),
+        Err(_) => return Ok(ValidationResult::Incomplete),
         _ => return Ok(ValidationResult::Valid(None)),
     }
     //return ReadlineError;
@@ -94,11 +106,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn valid_validation() {
+        let valid_query = "SELECT ?s ?p ?o { ?s ?p ?o . }";
+        let result = validate_sparql_string(valid_query);
+        match result {
+            Ok(ValidationResult::Valid(_res)) => {
+                assert!(true);
+            }
+            _ => assert!(false),
+        }
+    }
+
+    #[test]
     fn invalid_validation() {
-        let incomplete_query = "SELECT ?s ?p ?o { ?s ?p . }";
+        let incomplete_query = "SELECT ?s ?p ?o { ?s ?p. }";
         let result = validate_sparql_string(incomplete_query);
         match result {
-            Ok(ValidationResult::Incomplete) => println!("Good"),
+            Ok(ValidationResult::Incomplete) => assert!(true),
             _ => panic!("Not good"),
         }
     }
@@ -107,7 +131,7 @@ mod tests {
         let incomplete_query = "SELECT ?s ?p ?o ";
         let result = validate_sparql_string(incomplete_query);
         match result {
-            Ok(ValidationResult::Incomplete) => println!("Good"),
+            Ok(ValidationResult::Incomplete) => assert!(true),
             _ => panic!("Not good"),
         }
     }
