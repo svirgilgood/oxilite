@@ -96,7 +96,7 @@ fn print_query(
     let formatted_query = if is_prefix_injected {
         format!("{prefix_string}\n\n{query}")
     } else {
-        query.clone().to_string()
+        query.to_string()
     };
 
     if print {
@@ -180,9 +180,9 @@ fn get_namespaces(ns_dict: &mut Prefix, store: &Store) {
     let query = "
 PREFIX sh: <http://www.w3.org/ns/shacl#>
 
-SELECT ?prefix ?namespace 
+SELECT ?prefix ?namespace
 WHERE {
-    ?declaration 
+    ?declaration
         a sh:PrefixDeclaration ;
         sh:prefix ?prefix ;
         sh:namespace ?namespace ;
@@ -249,7 +249,7 @@ fn main() {
     };
 
     // if there is a directory supplied, the namespaces are supplied in the files
-    // if there is no directory supplied, it needs to be grabed from the prefixes stored
+    // if there is no directory supplied, it needs to be grabbed from the prefixes stored
     // in the databases
     if &args.directory == &None {
         get_namespaces(&mut ns_dict, &store)

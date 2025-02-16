@@ -32,10 +32,9 @@ impl Prefix {
         if self.map.contains_key(namespace) {
             return;
         }
-        self.map
-            .insert(namespace.clone().into(), prefix.clone().into());
+        self.map.insert(namespace.into(), prefix.into());
 
-        self.list.push(Box::new(namespace.clone().to_vec()));
+        self.list.push(Box::new(namespace.to_vec()));
     }
 
     // commenting out this method as we don't need an iterator... yet
@@ -187,9 +186,19 @@ mod tests {
         let res = ns_dict.shorten_uri(uri);
         assert_eq!(res, "rdf:comment");
     }
+    #[test]
+    fn should_shorten_html_link() {
+        let mut ns_dict = Prefix::new();
+        let namespace = "https://id.loc.gov/ontologies/premis−3−0−0.html#".as_bytes();
+        let prefix = "premis".as_bytes();
+        let uri = "https://id.loc.gov/ontologies/premis−3−0−0.html#fixity";
+        ns_dict.add(&namespace, &prefix);
+        let res = ns_dict.shorten_uri(uri);
+        assert_eq!(res, "premis:fixity")
+    }
 
     #[test]
-    fn should_return_formated_prefixes() {
+    fn should_return_formatted_prefixes() {
         let mut ns_dict = Prefix::new();
 
         let rdf_ns = "http://www.w3.org/2000/01/rdf-schema#".as_bytes();
