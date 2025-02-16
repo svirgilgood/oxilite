@@ -186,6 +186,16 @@ mod tests {
         let res = ns_dict.shorten_uri(uri);
         assert_eq!(res, "rdf:comment");
     }
+    #[test]
+    fn should_shorten_html_link() {
+        let mut ns_dict = Prefix::new();
+        let namespace = "https://id.loc.gov/ontologies/premis−3−0−0.html#".as_bytes();
+        let prefix = "premis".as_bytes();
+        let uri = "https://id.loc.gov/ontologies/premis−3−0−0.html#fixity";
+        ns_dict.add(&namespace, &prefix);
+        let res = ns_dict.shorten_uri(uri);
+        assert_eq!(res, "premis:fixity")
+    }
 
     #[test]
     fn should_return_formatted_prefixes() {
