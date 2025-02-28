@@ -19,9 +19,9 @@ use crate::repl::readlinefn;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None )]
 struct Args {
-    /// Name of the directory for trig/nq files
+    /// Name of the directory or file for trig/nq files, argument can be repeated
     #[arg(short, long)]
-    directory: Option<String>,
+    data: Vec<String>,
 
     /// Name of the file or string for loading the query
     #[arg(short, long)]
@@ -232,26 +232,37 @@ fn main() {
 
     let mut ns_dict: Prefix = Prefix::new();
 
-    // read through the directory if it is found
-    if let Some(dir) = &args.directory {
-        let paths = fs::read_dir(&dir).unwrap();
-        for path in paths {
-            if path.is_err() {
-                println!("Path contains error: {:?}", path);
-                continue;
-            };
-            update_store(&mut store, path.unwrap().path(), &mut ns_dict);
+    for data in &args.data {
+        let metadata = fs::metadata(data);
+
+        match metadata {
+            Ok(file_type) => {
+                if file_type.is_dir() {
+                    let paths = fs::read_dir(&data).unwrap();
+                    for path in paths {
+                        if path.is_err() {
+                            println!("Path contains error: {:?}", path);
+                            continue;
+                        };
+                        update_store(&mut store, path.unwrap().path(), &mut ns_dict);
+                    }
+                    if let Err(e) = ns_dict.save_to_store(&mut store) {
+                        println!("{:?}", e);
+                        panic!("Error in Save to Store");
+                    };
+                } else {
+                    update_store(&mut store, PathBuf::from(data), &mut ns_dict);
+                }
+            }
+            Err(e) => println!("File does not exist: {}\n with error {}", data, e),
         }
-        if let Err(e) = ns_dict.save_to_store(&mut store) {
-            println!("{:?}", e);
-            panic!("Error in Save to Store");
-        };
-    };
+    }
 
     // if there is a directory supplied, the namespaces are supplied in the files
     // if there is no directory supplied, it needs to be grabbed from the prefixes stored
     // in the databases
-    if &args.directory == &None {
+    if args.data.len() == 0 {
+        //if &args.data == &None {
         get_namespaces(&mut ns_dict, &store)
     };
 
