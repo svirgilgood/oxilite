@@ -1,6 +1,6 @@
 # Oxilite 
 
-## Usaage 
+## Usage 
 
 ```bash
 Usage: sparqlite [OPTIONS]
