@@ -119,6 +119,16 @@ impl Prefix {
         return uri.to_string();
     }
 
+    pub fn fetch_namespace_prefix(&self) -> Vec<(Box<[u8]>, Box<Vec<u8>>)> {
+        let mut prefixes = Vec::new();
+        for namespace in self.list.iter() {
+            if let Some(prefix) = self.get(&namespace) {
+                prefixes.push((prefix.to_owned(), namespace.to_owned()));
+            }
+        }
+        prefixes.to_owned()
+    }
+
     pub fn format_for_query(&self) -> String {
         let mut prefixes = String::new();
         for namespace in self.list.iter() {
