@@ -1,15 +1,24 @@
 use clap::{ArgAction, Parser};
 use oxigraph::{
-    io::DatasetFormat,
     model::Term,
     sparql::QueryResults,
-    sparql::{QueryResultsFormat, QuerySolution},
+    sparql::QuerySolution,
+    sparql::QueryOptions,
     store::Store,
+    sparql::{ QuerySolutionIter, QueryTripleIter },
+    sparql::results::{QueryResultsFormat, QueryResultsSerializer },
 };
+
+
+
+use oxigraph::io::{RdfFormat, RdfSerializer};
+//use oxigraph::sparql::results::{ QueryResultsFormat, QuerySolutionIter, QueryTripleIter};
+use oxrdfio::RdfParser;
+
 use prettytable::{Cell, Row, Table};
 use serde_derive::Deserialize;
 use serde_json::Map;
-use std::{fs, io::Cursor, path::PathBuf};
+use std::{fs, str, io::Cursor, path::PathBuf};
 
 mod prefix;
 use crate::prefix::{find_prefixes, Prefix};
@@ -58,7 +67,7 @@ fn update_store(store: &mut Store, path: PathBuf, ns_dict: &mut Prefix) -> Optio
 
     let file_contents = file.unwrap();
     find_prefixes(&file_contents, ns_dict);
-    let res = store.load_dataset(Cursor::new(&file_contents), DatasetFormat::TriG, None);
+    let res = store.load_from_reader(RdfParser::from_format(RdfFormat::Turtle), Cursor::new(&file_contents));
     if res.is_err() {
         println!("Error: {:?}", res);
         println!("Error saving {:?} to store", name);
@@ -84,33 +93,22 @@ struct ResultJson {
     bindings: Vec<Map<String, serde_json::Value>>,
 }
 
-fn print_query(
-    store: &Store,
-    query: &str,
-    ns_dict: &mut Prefix,
-    print: bool,
-    is_prefix_injected: bool,
-) {
+fn print_select(solutions: QuerySolutionIter, ns_dict: &mut Prefix) {
+
     let mut writer: Vec<_> = Vec::new();
-    let prefix_string = ns_dict.format_for_query();
-    let formatted_query = if is_prefix_injected {
-        format!("{prefix_string}\n\n{query}")
-    } else {
-        query.to_string()
-    };
+    //let res = solutions. .write(&mut writer, QueryResultsFormat::Json);
+    let json_serializer = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
+    let mut serializer = json_serializer.serialize_solutions_to_writer(&mut writer, solutions.variables().to_vec()).unwrap();
 
-    if print {
-        println!("{}\n\n", formatted_query);
+    for solution in solutions {
+        serializer.serialize(&solution.unwrap()).unwrap();
     }
 
-    let solutions = store.query(&formatted_query);
+    serializer.finish().unwrap();
 
-    let res = solutions
-        .unwrap()
-        .write(&mut writer, QueryResultsFormat::Json);
-    if res.is_err() {
-        println!("Error in parsing the results");
-    }
+
+
+
     let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
     let vars = object.head;
 
@@ -120,7 +118,7 @@ fn print_query(
             .clone()
             .into_iter()
             .map(|x| Cell::new(&x))
-            .collect(),
+           .collect(),
     );
     table.add_row(headings);
 
@@ -159,6 +157,62 @@ fn print_query(
     println!("Total: {}", row_numbers - 1);
 }
 
+
+
+fn print_graph(triples: QueryTripleIter, ns_dict: &Prefix)  {
+
+    let mut tserializer = RdfSerializer::from_format(RdfFormat::Turtle); //.for_writer(Vec::new());
+    for (prefix, namespace) in ns_dict.fetch_namespace_prefix() {
+        tserializer = tserializer.with_prefix(std::str::from_utf8(&prefix).unwrap(), std::str::from_utf8(&namespace).unwrap()).unwrap();
+    }
+
+    let mut serializer = tserializer.for_writer(Vec::new());
+
+
+    for triple in triples {
+        serializer.serialize_triple(triple.unwrap().as_ref()).unwrap();
+    }
+
+    //let final_ser = serializer.finish().unwrap();
+    match str::from_utf8(&serializer.finish().unwrap()) {
+        Ok(res) => println!("{}", res),
+        _ => println!("Error in parsing string")
+    }
+}
+
+fn print_query(
+    store: &Store,
+    query: &str,
+    ns_dict: &mut Prefix,
+    print: bool,
+    is_prefix_injected: bool,
+) {
+    let prefix_string = ns_dict.format_for_query();
+    let formatted_query = if is_prefix_injected {
+        format!("{prefix_string}\n\n{query}")
+    } else {
+        query.to_string()
+    };
+
+    if print {
+        println!("{}\n\n", formatted_query);
+    }
+
+    let (results, _explanation) = store.explain_query_opt(&formatted_query, QueryOptions::default(), true).unwrap();
+    match results.unwrap() {
+        QueryResults::Solutions(solutions) => {
+            print_select(solutions, ns_dict);
+        },
+        QueryResults::Boolean(result) => {
+            println!("{:?}", result);
+        },
+        QueryResults::Graph(triples) => {
+            print_graph(triples, ns_dict);
+        }
+    }
+
+}
+
 ///
 /// Takes a Prefix dictionary and a store, and updates the dictionary based on the
 /// existing prefixes in the database
@@ -166,6 +220,7 @@ fn print_query(
 ///
 /// PREFIX sh: <http://www.w3.org/ns/shacl#>
 ///
+///        store.dump_graph_to_writer(GraphNameRef::DefaultGraph, RdfFormat::NTriples, &mut buffer)?;
 /// ```
 /// SELECT ?prefix ?namespace
 /// WHERE {
@@ -309,3 +364,5 @@ fn main() {
         args.toggle_prefix,
     );
 }
+
+
