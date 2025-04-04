@@ -12,10 +12,9 @@ use oxigraph::{
 
 
 use oxigraph::io::{RdfFormat, RdfSerializer};
-//use oxigraph::sparql::results::{ QueryResultsFormat, QuerySolutionIter, QueryTripleIter};
 use oxrdfio::RdfParser;
 
-use prettytable::{Cell, Row, Table};
+use comfy_table::{Table, ContentArrangement};
 use serde_derive::Deserialize;
 use serde_json::Map;
 use std::{fs, str, io::Cursor, path::PathBuf};
@@ -113,19 +112,17 @@ fn print_select(solutions: QuerySolutionIter, ns_dict: &mut Prefix) {
     let vars = object.head;
 
     let mut table = Table::new();
-    let headings = Row::new(
-        vars.vars
+    table.set_content_arrangement(ContentArrangement::Dynamic);
+    let headings: Vec<String> =  vars.vars
             .clone()
             .into_iter()
-            .map(|x| Cell::new(&x))
-           .collect(),
-    );
-    table.add_row(headings);
-
+            .map(|x| x.to_string())
+           .collect();
     // the following loop should really be placed in its own function
     // perhaps a module and re-write the pretty printing of the table
+    table.set_header(headings);
     for result in object.results.bindings {
-        let mut print_res: Vec<Cell> = vec![];
+        let mut print_res  = Vec::new();
         for var in &vars.vars {
             if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None)
             {
@@ -143,18 +140,19 @@ fn print_select(solutions: QuerySolutionIter, ns_dict: &mut Prefix) {
                     ),
                     _ => continue,
                 };
-                print_res.push(Cell::new(&let_return_value));
+                print_res.push(let_return_value);
             } else {
                 // This happens when there is no particular result for the variable, we need to set a place holder
                 // This allows the cell to be empty
-                print_res.push(Cell::new(""))
+                print_res.push("".to_string())
             }
         }
-        table.add_row(Row::new(print_res));
+        table.add_row(print_res);
     }
-    table.printstd();
-    let row_numbers = table.len();
-    println!("Total: {}", row_numbers - 1);
+    //table.printstd();
+    println!("{table}");
+    let row_numbers = table.row_count();
+    println!("Total: {}", row_numbers);
 }
 
 
