@@ -305,6 +305,10 @@ fn main() {
                     };
                 } else {
                     update_store(&mut store, PathBuf::from(data), &mut ns_dict);
+                    if let Err(e) = ns_dict.save_to_store(&mut store) {
+                        println!("{:?}", e);
+                        panic!("Error in Save to Store");
+                    };
                 }
             }
             Err(e) => println!("File does not exist: {}\n with error {}", data, e),
