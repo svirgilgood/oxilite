@@ -3,13 +3,16 @@ use std::collections::HashMap;
 // use std::collections::hash_map::Iter;
 use oxigraph::model::vocab::{rdf, xsd};
 use oxigraph::model::{GraphName, Literal, NamedNode, Quad};
-use oxigraph::store::{StorageError, Store};
+use oxigraph::store::{StorageError};
+
+use crate::remote_store::{ Query };
 use regex::bytes::Regex;
 
 /// Function for Finding Prefixes with Regex
 pub fn find_prefixes(file_contents: &Vec<u8>, ns_dict: &mut Prefix) {
     let re: Regex = Regex::new(r"(?i)prefix\s+([\w\d\-_]+):\s+<([a-zA-Z0-9\/:\-.#_]+)>").unwrap();
     for (_, [prefix, namespace]) in re.captures_iter(file_contents).map(|c| c.extract()) {
+        //println!("Namespace: {}\nPrefix: {}", String::from_utf8(namespace.to_owned()).unwrap(), String::from_utf8(prefix.to_owned()).unwrap());
         ns_dict.add(namespace, prefix);
     }
 }
@@ -29,9 +32,9 @@ impl Prefix {
         };
     }
     pub fn add(&mut self, namespace: &[u8], prefix: &[u8]) {
-        if self.map.contains_key(namespace) {
-            return;
-        }
+        //if self.map.contains_key(namespace) {
+        //    return;
+        //}
         self.map.insert(namespace.into(), prefix.into());
 
         self.list.push(Box::new(namespace.to_vec()));
@@ -61,7 +64,11 @@ impl Prefix {
 
     /// I am not sure how much I like this implementation of save_to_store
     /// It works, but I am not sure the model is correct, or that it should be a method on the ns_dict struct
-    pub fn save_to_store(&self, store: &mut Store) -> Result<(), StorageError> {
+    pub fn save_to_store(&self, store: &mut impl Query, graph_name: Option<&str>) -> Result<(), StorageError> {
+        let named_graph = match graph_name {
+            Some(graph) => GraphName::NamedNode(NamedNode::new(graph).unwrap()),
+            None => GraphName::DefaultGraph
+        };
         let sh_prefix = NamedNode::new("http://www.w3.org/ns/shacl#prefix").unwrap();
         let sh_namespace = NamedNode::new("http://www.w3.org/ns/shacl#namespace").unwrap();
         let sh_declaration =
@@ -76,19 +83,19 @@ impl Prefix {
                 prefix_declaration.clone(),
                 rdf::TYPE,
                 sh_declaration.clone(),
-                GraphName::DefaultGraph,
+                named_graph.clone(),
             );
             let prefix_quad = Quad::new(
                 prefix_declaration.clone(),
                 sh_prefix.clone(),
                 Literal::new_typed_literal(prefix, xsd::STRING),
-                GraphName::DefaultGraph,
+                named_graph.clone(),
             );
             let namespace_quad = Quad::new(
                 prefix_declaration.clone(),
                 sh_namespace.clone(),
                 Literal::new_typed_literal(namespace, xsd::STRING),
-                GraphName::DefaultGraph,
+                named_graph.clone(),
             );
             store.insert(&type_quad)?;
             store.insert(&prefix_quad)?;
@@ -101,6 +108,7 @@ impl Prefix {
         if !self.sorted {
             self.sort()
         }
+
 
         let uri_bytes = transform_to_bytes(uri);
 
@@ -210,7 +218,6 @@ mod tests {
     #[test]
     fn should_return_formatted_prefixes() {
         let mut ns_dict = Prefix::new();
-
         let rdf_ns = "http://www.w3.org/2000/01/rdf-schema#".as_bytes();
         let rdf_pref = "rdf".as_bytes();
         ns_dict.add(&rdf_ns, &rdf_pref);
