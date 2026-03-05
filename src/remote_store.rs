@@ -1,13 +1,13 @@
+use oxigraph::model::QuadRef;
+use oxigraph::sparql::QueryEvaluationError;
+use oxigraph::store::{LoaderError, StorageError};
+use oxigraph::{io, sparql};
 use reqwest;
-use reqwest::header::{CONTENT_TYPE, ACCEPT};
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use serde_derive::Deserialize;
 use serde_json::Map;
-use oxigraph::{io, sparql};
-use oxigraph::sparql::EvaluationError;
-use oxigraph::store::{ StorageError, LoaderError};
-use oxigraph::model::QuadRef;
-use std::io::Read;
 use std::error::Error;
+use std::io::Read;
 use tokio;
 
 use crate::prefix::Prefix;
@@ -28,12 +28,10 @@ pub struct ResultJson {
     pub bindings: Vec<Map<String, serde_json::Value>>,
 }
 
-
-
-/// The RemoteStore needs to have the same traits that are impl for the 
+/// The RemoteStore needs to have the same traits that are impl for the
 /// oxigraph store, however, it also needs to allow different configuration
-/// options to be loaded locally. 
-/// 
+/// options to be loaded locally.
+///
 pub struct RemoteStore {
     pub url: String,
     pub username: Option<String>,
@@ -65,16 +63,29 @@ pub enum QueryResults {
 
 pub trait Query {
     fn explain_query(&mut self, query: &str, ns_dict: &Prefix) -> QueryResults;
-    fn query(&self, query: &str) -> Result<sparql::QueryResults, EvaluationError>;
+    fn query(&self, query: &str) -> Result<sparql::QueryResults, QueryEvaluationError>;
     fn len(&self) -> usize;
-    fn load_from_reader(&mut self, parser: impl Into<io::RdfParser>, reader: impl Read) -> Result<(), LoaderError>;
-    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<bool, StorageError> ;
+    fn load_from_reader(
+        &mut self,
+        parser: impl Into<io::RdfParser>,
+        reader: impl Read,
+    ) -> Result<(), LoaderError>;
+    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<(), StorageError>;
     fn optimize(&mut self) -> Result<(), StorageError>;
 }
 
-fn fetch_results(url: &str, query: &str, accept: &str, user: &Option<String>, password: &Option<String>) -> Result<String, Box<dyn std::error::Error>> {
-
-    let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+fn fetch_results(
+    url: &str,
+    query: &str,
+    accept: &str,
+    user: &Option<String>,
+    password: &Option<String>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
     let send_url = url.to_string();
     let send_accept = accept.to_string();
     let send_query = query.to_string();
@@ -84,30 +95,37 @@ fn fetch_results(url: &str, query: &str, accept: &str, user: &Option<String>, pa
             None => {
                 println!("Please enter password");
                 let mut pswd = String::new();
-                std::io::stdin().read_line(&mut pswd).expect("Error with the way that line was read");
-                let opswd = if pswd == "" { None } else { Some(pswd.trim().to_string()) };
+                std::io::stdin()
+                    .read_line(&mut pswd)
+                    .expect("Error with the way that line was read");
+                let opswd = if pswd == "" {
+                    None
+                } else {
+                    Some(pswd.trim().to_string())
+                };
                 (usr.clone(), opswd)
             }
-        }
-        None => ("".to_string(), None)
+        },
+        None => ("".to_string(), None),
     };
 
     //println!("user: {:?} password {:?}", usr, pswd);
 
-    let handle = runtime.spawn( async {
+    let handle = runtime.spawn(async {
         let client = reqwest::Client::new();
         //println!("user: {:?} password {:?}", &usr, &pswd);
-        let results = client.post(send_url)
-                .basic_auth(usr, pswd)
-                .header(ACCEPT, send_accept)
-                .header(CONTENT_TYPE, "application/sparql-query")
-                .body(send_query)
-                .send()
-                .await
-                .unwrap()
-                .text()
-                .await
-                .unwrap();
+        let results = client
+            .post(send_url)
+            .basic_auth(usr, pswd)
+            .header(ACCEPT, send_accept)
+            .header(CONTENT_TYPE, "application/sparql-query")
+            .body(send_query)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
         results
     });
 
@@ -115,18 +133,17 @@ fn fetch_results(url: &str, query: &str, accept: &str, user: &Option<String>, pa
 }
 
 impl Query for RemoteStore {
-    // .print_query 
-    // .explain_query_opt() -> from oxigraph 
-    // .query -> from oxigraph 
+    // .print_query
+    // .explain_query_opt() -> from oxigraph
+    // .query -> from oxigraph
     // .len -> from oxigraph, just to see if the store is empty
     // .load_from_reader -> used to read RDF files
     // .insert(&quad)
-    fn explain_query(&mut self, query: &str,  _ns_dict: &Prefix) -> QueryResults {
+    fn explain_query(&mut self, query: &str, _ns_dict: &Prefix) -> QueryResults {
         let query_obj = spargebra::Query::parse(query, None).unwrap();
 
         let user: Option<String> = self.username.clone();
         let password: Option<String> = self.password.clone();
-
 
         match query_obj {
             spargebra::Query::Select { .. } => {
@@ -138,7 +155,7 @@ impl Query for RemoteStore {
                 let object: SparqlJson = serde_json::from_str(&result.unwrap()).unwrap();
                 //Ok(QueryResults::Solutions(object))
                 QueryResults::Solutions(object)
-            },
+            }
             spargebra::Query::Construct { .. } => {
                 let accept = "text/turtle";
                 let result = fetch_results(&self.url, query, accept, &user, &password);
@@ -147,7 +164,7 @@ impl Query for RemoteStore {
                 //}
                 //Ok(QueryResults::Graph(result.await.unwrap().to_string()))
                 QueryResults::Graph(result.unwrap().to_string())
-            },
+            }
             spargebra::Query::Describe { .. } => {
                 let accept = "text/turtle";
                 let result = fetch_results(&self.url, query, accept, &user, &password);
@@ -156,7 +173,7 @@ impl Query for RemoteStore {
                 //}
                 //Ok(QueryResults::Graph(result.await.unwrap().to_string()))
                 QueryResults::Graph(result.unwrap().to_string())
-            },
+            }
             spargebra::Query::Ask { .. } => {
                 let accept = "application/sparql-results+json";
                 let result = fetch_results(&self.url, query, accept, &user, &password);
@@ -165,32 +182,32 @@ impl Query for RemoteStore {
                 //}
                 let res: bool = match result.unwrap().as_str() {
                     "true" => true,
-                    _ => false
+                    _ => false,
                 };
                 //Ok(QueryResults::Boolean(res))
                 QueryResults::Boolean(res)
             }
         }
-
-
     }
-    fn query(&self, query: &str) -> Result<sparql::QueryResults, EvaluationError>{
+    fn query(&self, query: &str) -> Result<sparql::QueryResults, QueryEvaluationError> {
         Ok(sparql::QueryResults::Boolean(true))
-
     }
     fn len(&self) -> usize {
         1
     }
-    fn load_from_reader(&mut self, parser: impl Into<io::RdfParser>, reader: impl Read) -> Result<(), LoaderError> {
+    fn load_from_reader(
+        &mut self,
+        parser: impl Into<io::RdfParser>,
+        reader: impl Read,
+    ) -> Result<(), LoaderError> {
         Ok(())
     }
-    fn insert<'b>(&mut self, quad: impl Into<QuadRef<'b>>) -> Result<bool, StorageError>  {
-        Ok(true)
+    fn insert<'b>(&mut self, quad: impl Into<QuadRef<'b>>) -> Result<(), StorageError> {
+        Ok(())
     }
 
-    fn optimize(&mut self) -> Result<(), StorageError>{
+    fn optimize(&mut self) -> Result<(), StorageError> {
         println!("Remote Store's cannot be optimized at this time");
         Ok(())
     }
 }
-

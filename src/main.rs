@@ -1,89 +1,102 @@
 use clap::{ArgAction, Parser};
+use oxigraph::io::JsonLdProfile;
+use oxigraph::sparql::{self, QueryEvaluationError};
 use oxigraph::{
-    model::{ Term, QuadRef },
     io,
+    model::{QuadRef, Term},
+    sparql::results::{QueryResultsFormat, QueryResultsSerializer},
+    sparql::QueryOptions,
     //sparql::QueryResults,
     sparql::QuerySolution,
-    sparql::QueryOptions,
-    store::{StorageError, LoaderError },
     store,
-    sparql::results::{QueryResultsFormat, QueryResultsSerializer },
+    store::{LoaderError, StorageError},
 };
-use oxigraph::io::JsonLdProfile;
-use oxigraph::sparql::EvaluationError;
-use oxigraph::sparql;
-use std::io::Read;
 use std::env;
+use std::io::Read;
 use std::path::Path;
-
-
 
 use oxigraph::io::{RdfFormat, RdfSerializer};
 use oxrdfio::RdfParser;
 
-use comfy_table::{Table, ContentArrangement};
+use comfy_table::{ContentArrangement, Table};
 //use serde_derive::Deserialize;
 //use serde_json::Map;
-use std::{fs, str, io::Cursor, path::PathBuf};
+use std::{fs, io::Cursor, path::PathBuf, str};
 
 mod prefix;
 use crate::prefix::{find_prefixes, Prefix};
 mod repl;
 use crate::repl::readlinefn;
 mod remote_store;
-use crate::remote_store::{ SparqlJson, Query, QueryResults, RemoteStore };
+use crate::remote_store::{Query, QueryResults, RemoteStore, SparqlJson};
 
 impl Query for store::Store {
     fn explain_query(&mut self, query: &str, ns_dict: &Prefix) -> QueryResults {
-     let (results, _explanation) = self.explain_query_opt(query, QueryOptions::default(), true).unwrap();
+        let (results, _explanation) = self
+            .explain_query_opt(query, QueryOptions::default(), true)
+            .unwrap();
         match results.unwrap() {
             sparql::QueryResults::Solutions(solutions) => {
                 let mut writer: Vec<_> = Vec::new();
                 //let res = solutions. .write(&mut writer, QueryResultsFormat::Json);
                 let json_serializer = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
-                let mut serializer = json_serializer.serialize_solutions_to_writer(&mut writer, solutions.variables().to_vec().clone()).unwrap();
+                let mut serializer = json_serializer
+                    .serialize_solutions_to_writer(
+                        &mut writer,
+                        solutions.variables().to_vec().clone(),
+                    )
+                    .unwrap();
                 for solution in solutions {
                     serializer.serialize(&solution.unwrap()).unwrap();
                 }
                 serializer.finish().unwrap();
-                let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
+                let object: SparqlJson =
+                    serde_json::from_slice(&writer).expect("Error in Parsing Json");
                 QueryResults::Solutions(object.to_owned())
-            },
-            sparql::QueryResults::Boolean(result) => {
-                QueryResults::Boolean(result)
-            },
+            }
+            sparql::QueryResults::Boolean(result) => QueryResults::Boolean(result),
             sparql::QueryResults::Graph(triples) => {
                 let mut tserializer = RdfSerializer::from_format(RdfFormat::Turtle); //.for_writer(Vec::new());
                 for (prefix, namespace) in ns_dict.fetch_namespace_prefix() {
-                    tserializer = tserializer.with_prefix(std::str::from_utf8(&prefix).unwrap(), std::str::from_utf8(&namespace).unwrap()).unwrap();
+                    tserializer = tserializer
+                        .with_prefix(
+                            std::str::from_utf8(&prefix).unwrap(),
+                            std::str::from_utf8(&namespace).unwrap(),
+                        )
+                        .unwrap();
                 }
 
                 let mut serializer = tserializer.for_writer(Vec::new());
 
-
                 for triple in triples {
-                    serializer.serialize_triple(triple.unwrap().as_ref()).unwrap();
+                    serializer
+                        .serialize_triple(triple.unwrap().as_ref())
+                        .unwrap();
                 }
 
                 //let final_ser = serializer.finish().unwrap();
                 let res = match str::from_utf8(&serializer.finish().unwrap()) {
                     Ok(res) => res.to_owned(), //println!("{}", res),
-                    _ => "Error in parsing rdf string".to_owned()
+                    _ => "Error in parsing rdf string".to_owned(),
                 };
                 QueryResults::Graph(res.to_string())
             }
         }
     }
-    fn query(&self, query: &str) -> Result<sparql::QueryResults, EvaluationError> {
+    fn query(&self, query: &str) -> Result<sparql::QueryResults, QueryEvaluationError> {
         <store::Store>::query(self, query)
     }
     fn len(&self) -> usize {
         <store::Store>::len(self).unwrap_or(11111)
     }
-    fn load_from_reader(&mut self, parser: impl Into<io::RdfParser>, reader: impl Read) -> Result<(), LoaderError> {
+    fn load_from_reader(
+        &mut self,
+        parser: impl Into<io::RdfParser>,
+        reader: impl Read,
+    ) -> Result<(), LoaderError> {
         <store::Store>::load_from_reader(self, parser, reader)
     }
-    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<bool, StorageError>  {
+    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<(), StorageError> {
         <store::Store>::insert(self, quad)
     }
     fn optimize(&mut self) -> Result<(), StorageError> {
@@ -135,13 +148,12 @@ struct Args {
     /// selected
     #[arg(long, action=ArgAction::SetTrue)]
     optimize_database: bool,
-
     // Needed Options:
-    // --inline-prefix: Vec<String> 
+    // --inline-prefix: Vec<String>
     // --prefix: Option<String>
     // --credentials: Option<String> In the format Username:Password. If username but no password,
     //                              ask for password.
-    // --update-config: bool Use the input values to update the config 
+    // --update-config: bool Use the input values to update the config
 }
 
 fn update_store(store: &mut QStore, path: PathBuf, ns_dict: &mut Prefix) -> Option<()> {
@@ -157,7 +169,7 @@ fn update_store(store: &mut QStore, path: PathBuf, ns_dict: &mut Prefix) -> Opti
         "n3" => RdfFormat::N3,
         "rdf" => RdfFormat::RdfXml,
         //"json" => RdfFormat::JsonLd(JsonLdProfile::Expanded),
-        _ => RdfFormat::Turtle
+        _ => RdfFormat::Turtle,
     };
     let file = fs::read(path);
 
@@ -167,7 +179,10 @@ fn update_store(store: &mut QStore, path: PathBuf, ns_dict: &mut Prefix) -> Opti
 
     let file_contents = file.unwrap();
     find_prefixes(&file_contents, ns_dict);
-    let res = store.load_from_reader(RdfParser::from_format(file_format), Cursor::new(&file_contents));
+    let res = store.load_from_reader(
+        oxigraph::io::RdfParser::from_format(file_format),
+        Cursor::new(&file_contents),
+    );
     if res.is_err() {
         println!("Error: {:?}", res);
         println!("Error saving {:?} to store", name);
@@ -178,35 +193,35 @@ fn update_store(store: &mut QStore, path: PathBuf, ns_dict: &mut Prefix) -> Opti
 }
 
 fn print_select(solutions: SparqlJson, ns_dict: &mut Prefix) {
-
-//    let mut writer: Vec<_> = Vec::new();
-//    //let res = solutions. .write(&mut writer, QueryResultsFormat::Json);
-//    let json_serializer = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
-//    let mut serializer = json_serializer.serialize_solutions_to_writer(&mut writer, solutions.variables().to_vec()).unwrap();
-//
-//    for solution in solutions {
-//        serializer.serialize(&solution.unwrap()).unwrap();
-//    }
-//
-//    serializer.finish().unwrap();
-//
-//    let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
+    //    let mut writer: Vec<_> = Vec::new();
+    //    //let res = solutions. .write(&mut writer, QueryResultsFormat::Json);
+    //    let json_serializer = QueryResultsSerializer::from_format(QueryResultsFormat::Json);
+    //    let mut serializer = json_serializer.serialize_solutions_to_writer(&mut writer, solutions.variables().to_vec()).unwrap();
+    //
+    //    for solution in solutions {
+    //        serializer.serialize(&solution.unwrap()).unwrap();
+    //    }
+    //
+    //    serializer.finish().unwrap();
+    //
+    //    let object: SparqlJson = serde_json::from_slice(&writer).expect("Error in Parsing Json");
 
     // This is where we need to pass the objects
     let vars = solutions.head;
 
     let mut table = Table::new();
     table.set_content_arrangement(ContentArrangement::Dynamic);
-    let headings: Vec<String> =  vars.vars
-            .clone()
-            .into_iter()
-            .map(|x| x.to_string())
-           .collect();
+    let headings: Vec<String> = vars
+        .vars
+        .clone()
+        .into_iter()
+        .map(|x| x.to_string())
+        .collect();
     // the following loop should really be placed in its own function
     // perhaps a module and re-write the pretty printing of the table
     table.set_header(headings);
     for result in solutions.results.bindings {
-        let mut print_res  = Vec::new();
+        let mut print_res = Vec::new();
         for var in &vars.vars {
             if let Some(serde_json::Value::Object(var_map)) = &result.get(&var.to_string()).or(None)
             {
@@ -239,28 +254,27 @@ fn print_select(solutions: SparqlJson, ns_dict: &mut Prefix) {
     println!("Total: {}", row_numbers);
 }
 
-
 /// We are going to keep this function in case we want to add formatting here
-fn print_graph(triples: &str, ns_dict: &Prefix)  {
+fn print_graph(triples: &str, ns_dict: &Prefix) {
     println!("{}", triples);
 
-//    let mut tserializer = RdfSerializer::from_format(RdfFormat::Turtle); //.for_writer(Vec::new());
-//    for (prefix, namespace) in ns_dict.fetch_namespace_prefix() {
-//        tserializer = tserializer.with_prefix(std::str::from_utf8(&prefix).unwrap(), std::str::from_utf8(&namespace).unwrap()).unwrap();
-//    }
-//
-//    let mut serializer = tserializer.for_writer(Vec::new());
-//
-//
-//    for triple in triples {
-//        serializer.serialize_triple(triple.unwrap().as_ref()).unwrap();
-//    }
-//
-//    //let final_ser = serializer.finish().unwrap();
-//    match str::from_utf8(&serializer.finish().unwrap()) {
-//        Ok(res) => println!("{}", res),
-//        _ => println!("Error in parsing string")
-//    }
+    //    let mut tserializer = RdfSerializer::from_format(RdfFormat::Turtle); //.for_writer(Vec::new());
+    //    for (prefix, namespace) in ns_dict.fetch_namespace_prefix() {
+    //        tserializer = tserializer.with_prefix(std::str::from_utf8(&prefix).unwrap(), std::str::from_utf8(&namespace).unwrap()).unwrap();
+    //    }
+    //
+    //    let mut serializer = tserializer.for_writer(Vec::new());
+    //
+    //
+    //    for triple in triples {
+    //        serializer.serialize_triple(triple.unwrap().as_ref()).unwrap();
+    //    }
+    //
+    //    //let final_ser = serializer.finish().unwrap();
+    //    match str::from_utf8(&serializer.finish().unwrap()) {
+    //        Ok(res) => println!("{}", res),
+    //        _ => println!("Error in parsing string")
+    //    }
 }
 
 fn print_query(
@@ -286,15 +300,14 @@ fn print_query(
     match results {
         QueryResults::Solutions(solutions) => {
             print_select(solutions, ns_dict);
-        },
+        }
         QueryResults::Boolean(result) => {
             println!("{:?}", result);
-        },
+        }
         QueryResults::Graph(triples) => {
             print_graph(&triples, ns_dict);
         }
     }
-
 }
 
 ///
@@ -314,7 +327,6 @@ fn print_query(
 ///````
 /// When querying the config file a `FROM` clause will be added
 fn get_namespaces(ns_dict: &mut Prefix, store: &QStore, named_graph: Option<&str>) {
-
     let prefix = "PREFIX sh: <http://www.w3.org/ns/shacl#>
 
 SELECT ?prefix ?namespace
@@ -328,11 +340,10 @@ WHERE {
     .
 }
         ";
-    let query = match named_graph { 
+    let query = match named_graph {
         Some(graph_uri) => format!("{}\nFROM <{}>\n{}", prefix, graph_uri, graph_pattern),
-        None => format!("{}\n{}", prefix, graph_pattern)
+        None => format!("{}\n{}", prefix, graph_pattern),
     };
-
 
     // This lambda function is about simplifying the turning of a Solution Term into a String
     // to simplify the creation of the dictionary entry
@@ -348,7 +359,8 @@ WHERE {
         value
     };
 
-    if let sparql::QueryResults::Solutions(solutions) = store.query(&query).expect("Error in query Results")
+    if let sparql::QueryResults::Solutions(solutions) =
+        store.query(&query).expect("Error in query Results")
     {
         for solution in solutions.filter_map(|x| x.ok()) {
             let namespace = term_getter(&solution, "namespace");
@@ -366,17 +378,16 @@ fn create_remote_store(url: &str, args: &Args) -> RemoteStore {
         Some(creds) => {
             let credentials: Vec<&str> = creds.split(":").collect();
             if credentials.len() == 0 {
-                return RemoteStore::new(url, None, None)
+                return RemoteStore::new(url, None, None);
             }
             let user = Some(credentials[0].to_string());
             if credentials.len() == 1 {
-                return RemoteStore::new(url, user.to_owned(), None)
+                return RemoteStore::new(url, user.to_owned(), None);
             }
             let password = Some(credentials[1].to_string());
             RemoteStore::new(url, user.to_owned(), password.to_owned())
-
-        },
-        None => RemoteStore::new(url, None, None)
+        }
+        None => RemoteStore::new(url, None, None),
     }
 }
 
@@ -393,10 +404,10 @@ impl Query for QStore {
         }
         //self.explain_query(query, ns_dict)
     }
-    fn query(&self, query: &str) -> Result<sparql::QueryResults, EvaluationError> {
+    fn query(&self, query: &str) -> Result<sparql::QueryResults, QueryEvaluationError> {
         match self {
             QStore::RemoteStore(store) => store.query(query),
-            QStore::Store(store) => store.query(query)
+            QStore::Store(store) => store.query(query),
         }
         //self.query(query)
     }
@@ -407,24 +418,28 @@ impl Query for QStore {
         }
         //self.len()
     }
-    fn load_from_reader(&mut self, parser: impl Into<io::RdfParser>, reader: impl Read) -> Result<(), LoaderError> {
+    fn load_from_reader(
+        &mut self,
+        parser: impl Into<io::RdfParser>,
+        reader: impl Read,
+    ) -> Result<(), LoaderError> {
         match self {
             QStore::RemoteStore(store) => store.load_from_reader(parser, reader),
-            QStore::Store(store) => store.load_from_reader(parser, reader)
+            QStore::Store(store) => store.load_from_reader(parser, reader),
         }
         //self.load_from_reader(parser, reader)
     }
-    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<bool, StorageError> {
+    fn insert<'a>(&mut self, quad: impl Into<QuadRef<'a>>) -> Result<(), StorageError> {
         //self.insert(quad)
         match self {
             QStore::RemoteStore(store) => store.insert(quad),
-            QStore::Store(store) => store.insert(quad)
+            QStore::Store(store) => store.insert(quad),
         }
     }
     fn optimize(&mut self) -> Result<(), StorageError> {
         match self {
             QStore::RemoteStore(store) => store.optimize(),
-            QStore::Store(store) => store.optimize()
+            QStore::Store(store) => store.optimize(),
         }
     }
 }
@@ -432,7 +447,7 @@ impl Query for QStore {
 fn main() {
     let args = Args::parse();
 
-    // 
+    //
     let mut is_remote = false;
 
     // Store::open is used for an on disk database, it will work even if the the
@@ -441,37 +456,48 @@ fn main() {
         Some(str) => {
             let path = std::path::Path::new(&str);
             QStore::Store(store::Store::open(path).unwrap())
-        },
+        }
         // Store::new() will create an in memory store that will drop after the script finishes
-        _ => { 
-            let remote_store: Vec<String> = args.data.iter().filter(|x| x.starts_with("http")).cloned().collect();
+        _ => {
+            let remote_store: Vec<String> = args
+                .data
+                .iter()
+                .filter(|x| x.starts_with("http"))
+                .cloned()
+                .collect();
             if remote_store.len() == 1 {
                 is_remote = true;
                 QStore::RemoteStore(create_remote_store(&remote_store[0], &args))
             } else {
                 QStore::Store(store::Store::new().unwrap())
             }
-
         }
     };
 
     let mut ns_dict: Prefix = Prefix::new();
     let mut config = QStore::Store(store::Store::new().unwrap());
-    update_store(&mut config, Path::new(&env::var("HOME").unwrap()).join(".config").join("sparqlite").join("config.trig").to_path_buf(), &mut ns_dict);
+    update_store(
+        &mut config,
+        Path::new(&env::var("HOME").unwrap())
+            .join(".config")
+            .join("sparqlite")
+            .join("config.trig")
+            .to_path_buf(),
+        &mut ns_dict,
+    );
 
     if let Some(prefixes) = args.prefixes {
         println!("\n***Found prefixes****\n");
         let prefix_vec = prefixes.as_bytes().to_owned();
         find_prefixes(&prefix_vec, &mut ns_dict);
-        let graph_name = if is_remote { 
+        let graph_name = if is_remote {
             Some(args.data[0].as_str())
-        } else { 
+        } else {
             None
         };
-        ns_dict.save_to_store(&mut config, graph_name) ;
+        ns_dict.save_to_store(&mut config, graph_name);
         let prefix_string = ns_dict.format_for_query();
         println!("Prefix String: {}", prefix_string);
-
     }
 
     if !is_remote {
@@ -519,7 +545,7 @@ fn main() {
 
     let length = store.len();
     if length == 0 {
-    //if length.is_err() || length.unwrap() == 0 {
+        //if length.is_err() || length.unwrap() == 0 {
         println!("Error in loading datasets");
         return;
     }
@@ -534,7 +560,6 @@ fn main() {
             }
         }
     };
-
 
     if args.optimize_database == true {
         println!("Optimization called");
@@ -554,10 +579,8 @@ fn main() {
             args.print_query,
             !args.toggle_prefix,
         );
-
-    }
-    else {
-    // println!("query: {query}");
+    } else {
+        // println!("query: {query}");
         print_query(
             &mut store,
             &query,
@@ -567,10 +590,5 @@ fn main() {
         );
     }
 
-    if args.update_config {
-
-
-    }
+    if args.update_config {}
 }
-
-
